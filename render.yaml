@@ -1,0 +1,20 @@
+﻿services:
+  - type: web
+    name: mi-cuaderno
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn servidor:app
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AUTH_REQUIRED
+        value: "1"
+      - key: APP_ENV
+        value: production
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false

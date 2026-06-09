@@ -1,0 +1,4 @@
+{
+  "private": true,
+  "description": "Frontend estatico y backend Flask para MiCuaderno. No requiere dependencias Node en produccion."
+}

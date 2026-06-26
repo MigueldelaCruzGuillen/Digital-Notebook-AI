@@ -147,14 +147,14 @@ def add_security_headers(response):
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     response.headers.setdefault(
         "Content-Security-Policy",
-        "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data: blob:; "
-        "connect-src 'self' http://127.0.0.1:5000 http://localhost:5000 https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; "
+        "img-src 'self' data: blob: https://*.googleusercontent.com; "
+        "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; "
+        "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; "
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-    )
+        )
     return response
 
 

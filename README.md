@@ -1,6 +1,7 @@
-# Mi Cuaderno Digital
 
-Mi Cuaderno Digital es una aplicación web para crear informes escolares con apariencia manuscrita. Permite escribir o generar contenido con IA, ajustar el estilo de letra, simular hojas de cuaderno y exportar el resultado como PDF o imagen.
+# Digital-Notebook-AI
+
+Digital-Notebook-AI es una aplicación web para crear informes escolares con apariencia manuscrita. Permite escribir o generar contenido con IA, ajustar el estilo de letra, simular hojas de cuaderno y exportar el resultado como PDF o imagen.
 
 ## Características
 
@@ -31,7 +32,7 @@ Mi Cuaderno Digital es una aplicación web para crear informes escolares con apa
 ## Estructura del proyecto
 
 ```text
-Mi-Cuaderno/
+Digital-Notebook-AI/
 ├── index.html
 ├── servidor.py
 ├── requirements.txt
@@ -58,8 +59,8 @@ Mi-Cuaderno/
 Clona el repositorio:
 
 ```bash
-git clone https://github.com/MigueldelaCruzGuillen/Mi-Cuaderno.git
-cd Mi-Cuaderno
+git clone https://github.com/MigueldelaCruzGuillen/Digital-Notebook-AI.git
+cd Digital-Notebook-AI
 ```
 
 Crea y activa un entorno virtual:
@@ -226,4 +227,10 @@ El backend incluye:
 
 Desarrollado por Miguel de la Cruz Guillén.
 
-Repositorio: [MigueldelaCruzGuillen/Mi-Cuaderno](https://github.com/MigueldelaCruzGuillen/Mi-Cuaderno)
+Repositorio: [MigueldelaCruzGuillen/Digital-Notebook-AI](https://github.com/MigueldelaCruzGuillen/Digital-Notebook-AI)
+```
+
+Los cambios principales realizados:
+- Actualizado el nombre del repositorio en el título y en todas las referencias
+- Cambiada la estructura del proyecto para reflejar el nuevo nombre de la carpeta raíz
+- Actualizado el enlace del repositorio en la sección de autor

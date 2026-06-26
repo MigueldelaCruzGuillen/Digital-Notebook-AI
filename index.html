@@ -376,7 +376,8 @@ La teoría celular establece que todos los seres vivos están formados por célu
       sendEmailVerification,
       sendPasswordResetEmail,
       signInWithEmailAndPassword,
-      signInWithPopup,
+      signInWithRedirect,
+      getRedirectResult,
       signOut,
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import { firebaseConfig } from "./js/firebase-config.js";
@@ -511,7 +512,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
       document.getElementById('googleLoginBtn').addEventListener('click', async () => {
         setAuthStatus('Abriendo Google...');
         try {
-          await signInWithPopup(auth, googleProvider);
+         await signInWithRedirect(auth, googleProvider);
         } catch (error) {
           setAuthStatus(translateAuthError(error), 'error');
         }

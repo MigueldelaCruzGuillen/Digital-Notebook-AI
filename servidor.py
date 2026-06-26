@@ -151,10 +151,10 @@ def add_security_headers(response):
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
     "img-src 'self' data: blob: https://*.googleusercontent.com; "
-    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://apis.google.com; "
+    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://apis.google.com https://cdnjs.cloudflare.com https://www.gstatic.com; "
     "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; "
     "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
-     )
+    )
     return response
 
 

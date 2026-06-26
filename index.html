@@ -367,81 +367,80 @@ La teoría celular establece que todos los seres vivos están formados por célu
   <div class="toast" id="toast"></div>
 
   <script type="module">
-    import { initializeApp
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+   
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import {
+      browserLocalPersistence,
       createUserWithEmailAndPassword,
       getAuth,
+      getRedirectResult,
       GoogleAuthProvider,
       onAuthStateChanged,
       sendEmailVerification,
       sendPasswordResetEmail,
+      setPersistence,
       signInWithEmailAndPassword,
+      signInWithPopup,
       signInWithRedirect,
-      getRedirectResult,
       signOut,
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-    import { firebaseConfig
-} from "./js/firebase-config.js";
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+    import { firebaseConfig } from "./js/firebase-config.js";
 
     const authStatus = document.getElementById('authStatus');
     const userName = document.getElementById('userName');
-    const authTabs = document.querySelectorAll('[data-auth-view
-]');
+    const authTabs = document.querySelectorAll('[data-auth-view]');
     const forms = {
       login: document.getElementById('loginForm'),
       register: document.getElementById('registerForm'),
       forgot: document.getElementById('forgotForm'),
-};
+    };
     let auth = null;
+    let redirectErrorMessage = '';
 
     function setAuthStatus(message, type = '') {
       authStatus.textContent = message;
-      authStatus.className = `auth-status ${type
-  }`.trim();
-}
+      authStatus.className = `auth-status ${type}`.trim();
+    }
 
     function showAuthView(view) {
-      Object.entries(forms).forEach(([key, form
-  ]) => {
+      Object.entries(forms).forEach(([key, form]) => {
         form.classList.toggle('active', key === view);
-  });
+      });
       authTabs.forEach(tab => {
         tab.classList.toggle('active', tab.dataset.authView === view);
-  });
+      });
       setAuthStatus(view === 'forgot' ? 'Te enviaremos un enlace para cambiar tu contraseña.' : '');
-}
+    }
 
     function isFirebaseConfigured() {
       return firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('TU_');
-}
+    }
 
     function translateAuthError(error) {
       const code = error?.code || '';
       const messages = {
+        'auth/account-exists-with-different-credential': 'Ya existe una cuenta con ese correo usando otro método de inicio.',
         'auth/email-already-in-use': 'Ese correo ya tiene una cuenta.',
         'auth/invalid-email': 'El correo no es válido.',
         'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+        'auth/operation-not-allowed': 'El proveedor de inicio de sesión no está habilitado en Firebase.',
+        'auth/popup-blocked': 'El navegador bloqueó la ventana de Google. Intentando redirección...',
         'auth/popup-closed-by-user': 'Cerraste la ventana de Google antes de terminar.',
         'auth/too-many-requests': 'Demasiados intentos. Espera un momento y prueba de nuevo.',
+        'auth/unauthorized-domain': 'Este dominio no está autorizado en Firebase Authentication.',
         'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
-  };
-      return messages[code
-  ] || error?.message || 'No se pudo completar la autenticación.';
-}
-
-    function isGoogleUser(user) {
-      return user?.providerData?.some(provider => provider.providerId === 'google.com');
-}
+      };
+      return messages[code] || `${code || 'auth/error'}: ${error?.message || 'No se pudo completar la autenticación.'}`;
+    }
 
     window.getAuthToken = async function getAuthToken() {
       if (!auth?.currentUser) throw new Error('Inicia sesión primero.');
       return auth.currentUser.getIdToken();
-};
+    };
 
     authTabs.forEach(tab => {
       tab.addEventListener('click', () => showAuthView(tab.dataset.authView));
-});
+    });
 
     document.getElementById('showForgotBtn').addEventListener('click', () => showAuthView('forgot'));
     document.getElementById('backLoginBtn').addEventListener('click', () => showAuthView('login'));
@@ -449,40 +448,39 @@ La teoría celular establece que todos los seres vivos están formados por célu
     if (!isFirebaseConfigured()) {
       document.body.className = 'signed-out';
       setAuthStatus('Configura js/firebase-config.js con tu proyecto de Firebase.', 'error');
-} else {
+    } else {
       const app = initializeApp(firebaseConfig);
       auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
+      const googleProvider = new GoogleAuthProvider();
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-getRedirectResult(auth).catch(error => {
-  console.error('Google redirect error:', error);
-  setAuthStatus(`${error.code || 'auth/error'
-    }: ${error.message
-    }`, 'error');
-  });
+      await setPersistence(auth, browserLocalPersistence);
 
-onAuthStateChanged(auth, user =>  {
+      getRedirectResult(auth).catch(error => {
+        console.error('Google redirect error:', error);
+        redirectErrorMessage = translateAuthError(error);
+        setAuthStatus(redirectErrorMessage, 'error');
+      });
+
+      onAuthStateChanged(auth, user => {
         const canEnter = !!user;
         document.body.className = canEnter ? 'signed-in dashboard-mode' : 'signed-out';
-        const displayName = user?.displayName || user?.email?.split('@')[
-      0
-    ] || '';
+        const displayName = user?.displayName || user?.email?.split('@')[0] || '';
         userName.textContent = displayName;
         window.currentAppUser = canEnter ? {
           uid: user.uid,
           name: displayName,
           email: user.email || '',
-    } : null;
-        if (canEnter && window.handleSignedInUser) window.handleSignedInUser(window.currentAppUser);
+        } : null;
 
-        if (user && !canEnter) {
-          setAuthStatus('Revisa tu correo y verifica la cuenta antes de entrar.', 'error');
-          signOut(auth);
-          return;
-    }
+        if (canEnter && window.handleSignedInUser) {
+          window.handleSignedInUser(window.currentAppUser);
+        }
 
-        setAuthStatus(user ? '' : 'Inicia sesión para usar el generador.');
-  });
+        if (!canEnter && !redirectErrorMessage) {
+          setAuthStatus('Inicia sesión para usar el generador.');
+        }
+      });
 
       forms.login.addEventListener('submit', async event => {
         event.preventDefault();
@@ -491,10 +489,11 @@ onAuthStateChanged(auth, user =>  {
           const email = document.getElementById('loginEmail').value.trim();
           const password = document.getElementById('loginPassword').value;
           await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
+        } catch (error) {
+          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
-    }
-  });
+        }
+      });
 
       forms.register.addEventListener('submit', async event => {
         event.preventDefault();
@@ -507,10 +506,11 @@ onAuthStateChanged(auth, user =>  {
           await signOut(auth);
           showAuthView('login');
           setAuthStatus('Cuenta creada. Revisa tu correo y verifica la cuenta antes de entrar.', 'success');
-    } catch (error) {
+        } catch (error) {
+          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
-    }
-  });
+        }
+      });
 
       forms.forgot.addEventListener('submit', async event => {
         event.preventDefault();
@@ -519,23 +519,30 @@ onAuthStateChanged(auth, user =>  {
           const email = document.getElementById('forgotEmail').value.trim();
           await sendPasswordResetEmail(auth, email);
           setAuthStatus('Revisa tu correo para cambiar la contraseña.', 'success');
-    } catch (error) {
+        } catch (error) {
+          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
-    }
-  });
+        }
+      });
 
       document.getElementById('googleLoginBtn').addEventListener('click', async () => {
         setAuthStatus('Abriendo Google...');
+        redirectErrorMessage = '';
         try {
-         await signInWithRedirect(auth, googleProvider);
-    } catch (error) {
-          console.error(error);
+          await signInWithPopup(auth, googleProvider);
+        } catch (error) {
+          console.error('Google popup error:', error);
+          if (['auth/popup-blocked', 'auth/popup-closed-by-user', 'auth/internal-error'].includes(error?.code)) {
+            setAuthStatus('Redirigiendo a Google...');
+            await signInWithRedirect(auth, googleProvider);
+            return;
+          }
           setAuthStatus(translateAuthError(error), 'error');
-    }
-  });
+        }
+      });
 
       document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
-}
+    }
   </script>
 
   <script>

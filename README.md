@@ -227,6 +227,7 @@ El backend incluye:
 
 Desarrollado por Miguel de la Cruz Guillén.
 
+Demo gratis: [https://lnkd.in/ePTCNksd](https://mi-cuaderno.onrender.com)
 Repositorio: [MigueldelaCruzGuillen/Digital-Notebook-AI](https://github.com/MigueldelaCruzGuillen/Digital-Notebook-AI)
 ```
 

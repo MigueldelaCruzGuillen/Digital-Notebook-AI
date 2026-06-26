@@ -462,7 +462,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
   });
 
       onAuthStateChanged(auth, user => {
-        console.log("Usuario:", user);
+        console.log("onAuthStateChanged:", user);
         const canEnter = !!user;
         document.body.className = canEnter ? 'signed-in dashboard-mode' : 'signed-out';
         const displayName = user?.displayName || user?.email?.split('@')[0] || '';

@@ -514,6 +514,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
         try {
          await signInWithRedirect(auth, googleProvider);
         } catch (error) {
+          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
         }
       });

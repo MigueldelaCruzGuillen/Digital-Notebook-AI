@@ -1,5 +1,5 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyAbF111pCQ_8NeFI034wGFwQvsauFrk_Nc",
+  apiKey: "AIzaSyAGksAsBH2_YDy1OaQA71w6UyzCyxUkwjA",
   authDomain: "mi-cuaderno-b4c93.firebaseapp.com",
   projectId: "mi-cuaderno-b4c93",
   storageBucket: "mi-cuaderno-b4c93.firebasestorage.app",

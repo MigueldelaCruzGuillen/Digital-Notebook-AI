@@ -452,12 +452,17 @@ La teoría celular establece que todos los seres vivos están formados por célu
       const googleProvider = new GoogleAuthProvider();
       googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-      getRedirectResult(auth).catch(error => {
-        console.error('Google redirect error:', error);
-        setAuthStatus(translateAuthError(error), 'error');
-      });
+     getRedirectResult(auth)
+  .then((result) => {
+      console.log("Redirect Result:", result);
+  })
+  .catch((error) => {
+      console.error("Google redirect error:", error);
+      setAuthStatus(translateAuthError(error), "error");
+  });
 
       onAuthStateChanged(auth, user => {
+        console.log("Usuario:", user);
         const canEnter = !!user;
         document.body.className = canEnter ? 'signed-in dashboard-mode' : 'signed-out';
         const displayName = user?.displayName || user?.email?.split('@')[0] || '';

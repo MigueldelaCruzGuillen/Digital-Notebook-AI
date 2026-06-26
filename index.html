@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -367,21 +367,17 @@ La teoría celular establece que todos los seres vivos están formados por célu
   <div class="toast" id="toast"></div>
 
   <script type="module">
-   
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import {
-      browserLocalPersistence,
       createUserWithEmailAndPassword,
       getAuth,
-      getRedirectResult,
       GoogleAuthProvider,
       onAuthStateChanged,
       sendEmailVerification,
       sendPasswordResetEmail,
-      setPersistence,
       signInWithEmailAndPassword,
-      signInWithPopup,
       signInWithRedirect,
+      getRedirectResult,
       signOut,
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import { firebaseConfig } from "./js/firebase-config.js";
@@ -395,7 +391,6 @@ La teoría celular establece que todos los seres vivos están formados por célu
       forgot: document.getElementById('forgotForm'),
     };
     let auth = null;
-    let redirectErrorMessage = '';
 
     function setAuthStatus(message, type = '') {
       authStatus.textContent = message;
@@ -419,18 +414,21 @@ La teoría celular establece que todos los seres vivos están formados por célu
     function translateAuthError(error) {
       const code = error?.code || '';
       const messages = {
-        'auth/account-exists-with-different-credential': 'Ya existe una cuenta con ese correo usando otro método de inicio.',
         'auth/email-already-in-use': 'Ese correo ya tiene una cuenta.',
         'auth/invalid-email': 'El correo no es válido.',
         'auth/invalid-credential': 'Correo o contraseña incorrectos.',
-        'auth/operation-not-allowed': 'El proveedor de inicio de sesión no está habilitado en Firebase.',
-        'auth/popup-blocked': 'El navegador bloqueó la ventana de Google. Intentando redirección...',
+        'auth/internal-error': 'Firebase devolvió un error interno. Revisa API key, OAuth Client y dominios autorizados.',
+        'auth/operation-not-allowed': 'El proveedor de Google no está habilitado en Firebase.',
         'auth/popup-closed-by-user': 'Cerraste la ventana de Google antes de terminar.',
         'auth/too-many-requests': 'Demasiados intentos. Espera un momento y prueba de nuevo.',
         'auth/unauthorized-domain': 'Este dominio no está autorizado en Firebase Authentication.',
         'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
       };
-      return messages[code] || `${code || 'auth/error'}: ${error?.message || 'No se pudo completar la autenticación.'}`;
+      return messages[code] || error?.message || 'No se pudo completar la autenticación.';
+    }
+
+    function isGoogleUser(user) {
+      return user?.providerData?.some(provider => provider.providerId === 'google.com');
     }
 
     window.getAuthToken = async function getAuthToken() {
@@ -454,12 +452,9 @@ La teoría celular establece que todos los seres vivos están formados por célu
       const googleProvider = new GoogleAuthProvider();
       googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-      await setPersistence(auth, browserLocalPersistence);
-
       getRedirectResult(auth).catch(error => {
         console.error('Google redirect error:', error);
-        redirectErrorMessage = translateAuthError(error);
-        setAuthStatus(redirectErrorMessage, 'error');
+        setAuthStatus(translateAuthError(error), 'error');
       });
 
       onAuthStateChanged(auth, user => {
@@ -472,14 +467,15 @@ La teoría celular establece que todos los seres vivos están formados por célu
           name: displayName,
           email: user.email || '',
         } : null;
+        if (canEnter && window.handleSignedInUser) window.handleSignedInUser(window.currentAppUser);
 
-        if (canEnter && window.handleSignedInUser) {
-          window.handleSignedInUser(window.currentAppUser);
+        if (user && !canEnter) {
+          setAuthStatus('Revisa tu correo y verifica la cuenta antes de entrar.', 'error');
+          signOut(auth);
+          return;
         }
 
-        if (!canEnter && !redirectErrorMessage) {
-          setAuthStatus('Inicia sesión para usar el generador.');
-        }
+        setAuthStatus(user ? '' : 'Inicia sesión para usar el generador.');
       });
 
       forms.login.addEventListener('submit', async event => {
@@ -490,7 +486,6 @@ La teoría celular establece que todos los seres vivos están formados por célu
           const password = document.getElementById('loginPassword').value;
           await signInWithEmailAndPassword(auth, email, password);
         } catch (error) {
-          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
         }
       });
@@ -507,7 +502,6 @@ La teoría celular establece que todos los seres vivos están formados por célu
           showAuthView('login');
           setAuthStatus('Cuenta creada. Revisa tu correo y verifica la cuenta antes de entrar.', 'success');
         } catch (error) {
-          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
         }
       });
@@ -520,23 +514,16 @@ La teoría celular establece que todos los seres vivos están formados por célu
           await sendPasswordResetEmail(auth, email);
           setAuthStatus('Revisa tu correo para cambiar la contraseña.', 'success');
         } catch (error) {
-          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
         }
       });
 
       document.getElementById('googleLoginBtn').addEventListener('click', async () => {
         setAuthStatus('Abriendo Google...');
-        redirectErrorMessage = '';
         try {
-          await signInWithPopup(auth, googleProvider);
+         await signInWithRedirect(auth, googleProvider);
         } catch (error) {
-          console.error('Google popup error:', error);
-          if (['auth/popup-blocked', 'auth/popup-closed-by-user', 'auth/internal-error'].includes(error?.code)) {
-            setAuthStatus('Redirigiendo a Google...');
-            await signInWithRedirect(auth, googleProvider);
-            return;
-          }
+          console.error(error);
           setAuthStatus(translateAuthError(error), 'error');
         }
       });
@@ -554,23 +541,21 @@ La teoría celular establece que todos los seres vivos están formados por célu
 
     function getTaskStorageKey() {
       const userId = window.currentAppUser?.uid || 'local';
-      return `miCuadernoTasks:${userId
-  }`;
-}
+      return `miCuadernoTasks:${userId}`;
+    }
 
     function getSavedTasks() {
       try {
         return JSON.parse(localStorage.getItem(getTaskStorageKey()) || '[]');
-  } catch {
+      } catch {
         return [];
-  }
-}
+      }
+    }
 
     function setSavedTasks(tasks) {
-      localStorage.setItem(getTaskStorageKey(), JSON.stringify(tasks.slice(0,
-  30)));
+      localStorage.setItem(getTaskStorageKey(), JSON.stringify(tasks.slice(0, 30)));
       renderDashboard();
-}
+    }
 
     function getTaskSnapshot() {
       return {
@@ -579,11 +564,10 @@ La teoría celular establece que todos los seres vivos están formados por célu
         subject: document.getElementById('subjectInput').value || '',
         date: document.getElementById('dateInput').value || '',
         body: document.getElementById('bodyInput').value || '',
-        state: { ...state
-    },
+        state: { ...state },
         updatedAt: new Date().toISOString(),
-  };
-}
+      };
+    }
 
     function applyTaskSnapshot(task) {
       if (!task) return;
@@ -594,29 +578,27 @@ La teoría celular establece que todos los seres vivos están formados por célu
       document.getElementById('bodyInput').value = task.body || '';
       syncAllControls();
       render();
-}
+    }
 
     function saveCurrentTask() {
       const task = getTaskSnapshot();
       const tasks = getSavedTasks().filter(item => item.title !== task.title || item.body !== task.body);
-      setSavedTasks([task, ...tasks
-  ]);
+      setSavedTasks([task, ...tasks]);
       showToast('Tarea guardada');
-}
+    }
 
     function startNewTask() {
       document.getElementById('titleInput').value = 'Nueva tarea';
       document.getElementById('subjectInput').value = '';
-      document.getElementById('dateInput').value = new Date().toLocaleDateString('es-DO',
-  {
+      document.getElementById('dateInput').value = new Date().toLocaleDateString('es-DO', {
         day: 'numeric',
         month: 'long',
         year: 'numeric'
-  });
+      });
       document.getElementById('bodyInput').value = '';
       showEditor();
       render();
-}
+    }
 
     function openSavedTask(taskId) {
       const task = getSavedTasks().find(item => item.id === taskId);
@@ -624,95 +606,80 @@ La teoría celular establece que todos los seres vivos están formados por célu
       applyTaskSnapshot(task);
       showEditor();
       showToast('Tarea abierta');
-}
+    }
 
     function showDashboard() {
       document.body.classList.add('dashboard-mode');
       document.body.classList.remove('editor-mode');
       renderDashboard();
-}
+    }
 
     function showEditor() {
       document.body.classList.add('editor-mode');
       document.body.classList.remove('dashboard-mode');
-}
+    }
 
     function renderTaskList(container, tasks, emptyText) {
       container.innerHTML = tasks.length
         ? tasks.map(task => `
           <button class="task-row" type="button" onclick="openSavedTask('${escAttr(task.id)}')">
-            <span class="task-title">${escHtml(task.title || 'Sin título')
-  }</span>
-            <span class="task-meta">${escHtml(task.subject || 'Sin materia')
-  } · ${formatTaskDate(task.updatedAt)
-  }</span>
+            <span class="task-title">${escHtml(task.title || 'Sin título')}</span>
+            <span class="task-meta">${escHtml(task.subject || 'Sin materia')} · ${formatTaskDate(task.updatedAt)}</span>
           </button>
         `).join('')
-        : `<div class="empty-tasks">${emptyText
-  }</div>`;
-}
+        : `<div class="empty-tasks">${emptyText}</div>`;
+    }
 
     function renderDashboard() {
       const tasks = getSavedTasks();
       const name = window.currentAppUser?.name || 'estudiante';
-      document.getElementById('dashboardGreeting').textContent = `Hola, ${name
-  }`;
+      document.getElementById('dashboardGreeting').textContent = `Hola, ${name}`;
       document.getElementById('historyCount').textContent = tasks.length;
-      renderTaskList(document.getElementById('recentTasks'), tasks.slice(0,
-  4), 'Todavía no tienes tareas recientes.');
+      renderTaskList(document.getElementById('recentTasks'), tasks.slice(0, 4), 'Todavía no tienes tareas recientes.');
       renderTaskList(document.getElementById('taskHistory'), tasks, 'Guarda tu primera tarea para verla aquí.');
-}
+    }
 
     function formatTaskDate(value) {
       if (!value) return 'Ahora';
-      return new Intl.DateTimeFormat('es-DO',
-  {
+      return new Intl.DateTimeFormat('es-DO', {
         day: 'numeric',
         month: 'short',
         hour: 'numeric',
         minute: '2-digit',
-  }).format(new Date(value));
-}
+      }).format(new Date(value));
+    }
 
     function syncAllPickers() {
-  ['font', 'slant', 'lines', 'size', 'template'
-  ].forEach(key => {
-        document.querySelectorAll(`[data-${key
-      }
-    ]`).forEach(item => {
-          item.classList.toggle('active', item.dataset[key
-      ] === state[key
-      ]);
-    });
-  });
+      ['font', 'slant', 'lines', 'size', 'template'].forEach(key => {
+        document.querySelectorAll(`[data-${key}]`).forEach(item => {
+          item.classList.toggle('active', item.dataset[key] === state[key]);
+        });
+      });
       syncInkRows();
-}
+    }
 
     window.handleSignedInUser = function handleSignedInUser() {
       renderDashboard();
-};
+    };
 
     async function getPrivateHeaders(extraHeaders = {}) {
       const token = await window.getAuthToken();
       return {
         ...extraHeaders,
-        Authorization: `Bearer ${token
-    }`,
-  };
-}
+        Authorization: `Bearer ${token}`,
+      };
+    }
 
     async function readJsonResponse(response) {
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         return response.json();
-  }
+      }
 
       const text = await response.text();
-      const preview = text.replace(/\s+/g, ' ').slice(0,
-  120);
-      throw new Error(`El servidor no devolvió JSON. Respuesta recibida: ${preview
-  }`);
-}
+      const preview = text.replace(/\s+/g, ' ').slice(0, 120);
+      throw new Error(`El servidor no devolvió JSON. Respuesta recibida: ${preview}`);
+    }
 
     const state = {
       font: 'caveat',
@@ -738,29 +705,24 @@ La teoría celular establece que todos los seres vivos están formados por célu
       shadow: 0.62,
       grain: 0.2,
       photoTilt: -0.35,
-};
+    };
 
-    document.getElementById('dateInput').value = new Date().toLocaleDateString('es-DO',
-{
+    document.getElementById('dateInput').value = new Date().toLocaleDateString('es-DO', {
       day: 'numeric',
       month: 'long',
       year: 'numeric'
-});
+    });
 
     function makePicker(containerId, key) {
       document.getElementById(containerId).addEventListener('click', event => {
-        const btn = event.target.closest('[data-' + key + '
-    ]');
+        const btn = event.target.closest('[data-' + key + ']');
         if (!btn) return;
-        document.querySelectorAll('#' + containerId + ' [data-' + key + '
-    ]').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('#' + containerId + ' [data-' + key + ']').forEach(item => item.classList.remove('active'));
         btn.classList.add('active');
-        state[key
-    ] = btn.dataset[key
-    ];
+        state[key] = btn.dataset[key];
         render();
-  });
-}
+      });
+    }
 
     makePicker('fontPicker', 'font');
     makePicker('slantPicker', 'slant');
@@ -770,8 +732,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
 
     document.querySelectorAll('.ink-row').forEach(row => {
       row.addEventListener('click', event => {
-        const swatch = event.target.closest('[data-ink
-    ]');
+        const swatch = event.target.closest('[data-ink]');
         if (!swatch) return;
 
         const ink = swatch.dataset.ink;
@@ -782,147 +743,132 @@ La teoría celular establece que todos los seres vivos están formados por célu
           state.metaInk = ink;
           state.bodyInk = ink;
           syncInkRows();
-    } else {
-          state[target
-      ] = ink;
-          row.querySelectorAll('[data-ink
-      ]').forEach(item => item.classList.remove('active'));
+        } else {
+          state[target] = ink;
+          row.querySelectorAll('[data-ink]').forEach(item => item.classList.remove('active'));
           swatch.classList.add('active');
-    }
+        }
         render();
-  });
-});
+      });
+    });
 
     document.getElementById('sizeSlider').addEventListener('input', event => {
       state.textSize = Number(event.target.value);
       document.getElementById('sizeVal').textContent = state.textSize + 'px';
       render();
-});
+    });
 
     document.getElementById('lineHSlider').addEventListener('input', event => {
       state.lineH = Number(event.target.value);
       document.getElementById('lineHVal').textContent = state.lineH + 'px';
       render();
-});
+    });
 
     document.getElementById('marginSlider').addEventListener('input', event => {
       state.margin = Number(event.target.value);
       document.getElementById('marginVal').textContent = state.margin + 'px';
       render();
-});
+    });
 
     document.getElementById('jitterSlider').addEventListener('input', event => {
       state.jitter = Number(event.target.value);
       document.getElementById('jitterVal').textContent = state.jitter.toFixed(1);
       render();
-});
+    });
 
     document.getElementById('waveSlider').addEventListener('input', event => {
       state.baselineWave = Number(event.target.value);
       document.getElementById('waveVal').textContent = state.baselineWave.toFixed(1);
       render();
-});
+    });
 
     document.getElementById('mistakeSlider').addEventListener('input', event => {
       state.mistakeIntensity = Number(event.target.value);
       document.getElementById('mistakeVal').textContent = state.mistakeIntensity.toFixed(2);
       render();
-});
+    });
 
-    bindPhotoSlider('flashSlider', 'flashVal', 'flash',
-2);
-    bindPhotoSlider('shadowSlider', 'shadowVal', 'shadow',
-2);
-    bindPhotoSlider('grainSlider', 'grainVal', 'grain',
-2);
-    bindPhotoSlider('tiltSlider', 'tiltVal', 'photoTilt',
-2);
+    bindPhotoSlider('flashSlider', 'flashVal', 'flash', 2);
+    bindPhotoSlider('shadowSlider', 'shadowVal', 'shadow', 2);
+    bindPhotoSlider('grainSlider', 'grainVal', 'grain', 2);
+    bindPhotoSlider('tiltSlider', 'tiltVal', 'photoTilt', 2);
 
     function bindPhotoSlider(inputId, valueId, key, digits) {
       document.getElementById(inputId).addEventListener('input', event => {
-        state[key
-    ] = Number(event.target.value);
-        document.getElementById(valueId).textContent = state[key
-    ].toFixed(digits);
+        state[key] = Number(event.target.value);
+        document.getElementById(valueId).textContent = state[key].toFixed(digits);
         render();
-  });
-}
+      });
+    }
 
     function getPresetStore() {
       try {
         return JSON.parse(localStorage.getItem('miCuadernoStylePresets') || '{}');
-  } catch {
+      } catch {
         return {};
-  }
-}
+      }
+    }
 
     function setPresetStore(store) {
       localStorage.setItem('miCuadernoStylePresets', JSON.stringify(store));
-}
+    }
 
     function getStyleSnapshot() {
       const keys = [
         'font', 'ink', 'titleInk', 'metaInk', 'bodyInk', 'template', 'lines', 'size', 'slant',
         'textSize', 'lineH', 'margin', 'fontWeight', 'letterSpacing', 'jitter', 'wordSpacing',
         'lineRotation', 'baselineWave', 'mistakeIntensity', 'flash', 'shadow', 'grain', 'photoTilt'
-  ];
+      ];
       return keys.reduce((snapshot, key) => {
-        snapshot[key
-    ] = state[key
-    ];
+        snapshot[key] = state[key];
         return snapshot;
-  },
-  {});
-}
+      }, {});
+    }
 
     function saveStylePreset() {
       const name = document.getElementById('presetNameInput').value.trim() || 'Mi estilo';
       const store = getPresetStore();
-      store[name
-  ] = getStyleSnapshot();
+      store[name] = getStyleSnapshot();
       setPresetStore(store);
       refreshPresetSelect(name);
       showToast('Estilo guardado');
-}
+    }
 
     function loadStylePreset() {
       const select = document.getElementById('presetSelect');
       const name = select.value;
-      const preset = getPresetStore()[name
-  ];
+      const preset = getPresetStore()[name];
       if (!preset) {
         showToast('No hay estilo seleccionado');
         return;
-  }
+      }
 
       Object.assign(state, preset);
       document.getElementById('presetNameInput').value = name;
       syncAllControls();
       render();
       showToast('Estilo cargado');
-}
+    }
 
     function deleteStylePreset() {
       const select = document.getElementById('presetSelect');
       const name = select.value;
       if (!name) return;
       const store = getPresetStore();
-      delete store[name
-  ];
+      delete store[name];
       setPresetStore(store);
       refreshPresetSelect();
       showToast('Estilo borrado');
-}
+    }
 
     function refreshPresetSelect(selectedName = '') {
       const select = document.getElementById('presetSelect');
       const names = Object.keys(getPresetStore()).sort((a, b) => a.localeCompare(b));
       select.innerHTML = names.length
-        ? names.map(name => `<option value="${escHtml(name)}">${escHtml(name)
-  }</option>`).join('')
+        ? names.map(name => `<option value="${escHtml(name)}">${escHtml(name)}</option>`).join('')
         : '<option value="">Sin estilos guardados</option>';
       if (selectedName) select.value = selectedName;
-}
+    }
 
     async function generateReportFromTopic() {
       const topicInput = document.getElementById('aiTopicInput');
@@ -935,55 +881,50 @@ La teoría celular establece que todos los seres vivos están formados por célu
         showToast('Escribe un tema primero');
         topicInput.focus();
         return;
-  }
+      }
 
       status.textContent = 'Generando informe...';
       status.style.display = 'block';
       showToast('Generando informe con IA...');
 
       try {
-        const response = await fetch(GENERATE_URL,
-    {
+        const response = await fetch(GENERATE_URL, {
           method: 'POST',
-          headers: await getPrivateHeaders({ 'Content-Type': 'application/json'
-      }),
+          headers: await getPrivateHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             tema: topic,
             grado: gradeInput.value.trim() || 'nivel escolar',
             extension: lengthSelect.value,
             plantilla: state.template,
-      })
-    });
+          })
+        });
 
         const data = await readJsonResponse(response);
         if (!response.ok) {
           throw new Error(data.error || 'Error del servidor');
-    }
+        }
 
-        document.getElementById('titleInput').value = data.title || `Informe sobre ${topic
-    }`;
+        document.getElementById('titleInput').value = data.title || `Informe sobre ${topic}`;
         document.getElementById('subjectInput').value = data.subject || gradeInput.value || '';
         document.getElementById('bodyInput').value = data.body || '';
 
-        if (data.template && document.querySelector(`[data-template="${data.template}"
-    ]`)) {
+        if (data.template && document.querySelector(`[data-template="${data.template}"]`)) {
           state.template = data.template;
-          document.querySelectorAll('[data-template
-      ]').forEach(item => {
+          document.querySelectorAll('[data-template]').forEach(item => {
             item.classList.toggle('active', item.dataset.template === state.template);
-      });
-    }
+          });
+        }
 
         status.textContent = 'Informe generado y aplicado.';
         render();
         showToast('Informe generado');
-  } catch (error) {
+      } catch (error) {
         status.textContent = 'Error: ' + error.message;
         status.style.display = 'block';
         showToast('Error al generar informe');
         console.error(error);
-  }
-}
+      }
+    }
     function applyBodyColor(ink) {
       const input = document.getElementById('bodyInput');
       const start = input.selectionStart;
@@ -991,22 +932,17 @@ La teoría celular establece que todos los seres vivos están formados por célu
       if (start === end) {
         showToast('Selecciona un texto primero');
         return;
-  }
+      }
 
       const selected = input.value.slice(start, end);
       const before = input.value.slice(0, start);
       const after = input.value.slice(end);
-      const wrapped = `[${ink
-    }
-  ]${selected
-  }[/${ink
-    }
-  ]`;
+      const wrapped = `[${ink}]${selected}[/${ink}]`;
       input.value = before + wrapped + after;
       input.focus();
       input.setSelectionRange(start, start + wrapped.length);
       render();
-}
+    }
 
     function render() {
       const title = document.getElementById('titleInput').value || 'Sin título';
@@ -1019,8 +955,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
       const pageW = state.size === 'mini' ? 520 : 720;
       const pageMinH = state.size === 'a4' ? 1016 : state.size === 'letter' ? 930 : 734;
       const ringCount = Math.floor(pageMinH / 48);
-      const rings = Array.from({ length: ringCount
-  }, () => '<div class="ring"></div>').join('');
+      const rings = Array.from({ length: ringCount }, () => '<div class="ring"></div>').join('');
       const slantClass = state.slant !== 'none' ? 'slanted' : '';
       const skewVal = state.slant === 'medium' ? '-1.2deg' : state.slant === 'light' ? '-0.5deg' : '0deg';
       const metaSep = subject && date ? ' - ' : '';
@@ -1028,40 +963,29 @@ La teoría celular establece que todos los seres vivos están formados por célu
       const bodyLines = wrapBodyLines(body, pageW, margin);
       const pages = paginateBodyLines(bodyLines, pageMinH);
 
-      const photoStyle = `--photo-tilt:${state.photoTilt
-  }deg; --photo-shadow:${state.shadow
-  }; --photo-flash:${state.flash
-  }; --photo-grain:${state.grain
-  };`;
+      const photoStyle = `--photo-tilt:${state.photoTilt}deg; --photo-shadow:${state.shadow}; --photo-flash:${state.flash}; --photo-grain:${state.grain};`;
       const template = getTemplateConfig(state.template);
 
       document.getElementById('canvasArea').innerHTML = pages.map((pageLines, pageIndex) => `
         <div class="photo-scene template-${state.template}" style="${photoStyle}">
           <div class="notebook-wrapper" data-page="${pageIndex + 1}">
             <div class="notebook-page export-page template-page template-${state.template} page-${state.lines} size-${state.size}" id="notebookPage-${pageIndex + 1}" style="width:${pageW}px; min-height:${pageMinH}px; --line-height-px:${lineH}px; --margin-left:${margin}px; --photo-flash:${state.flash}; --photo-grain:${state.grain};">
-            <div class="paper-lines">${paperLines
-  }</div>
+            <div class="paper-lines">${paperLines}</div>
             <div class="margin-line"></div>
-            <div class="rings">${rings
-  }</div>
-            ${template.decor(pageIndex)
-  }
+            <div class="rings">${rings}</div>
+            ${template.decor(pageIndex)}
             <div class="page-content">
               ${pageIndex === 0 ? `
-                ${template.header(title, subject, date, metaSep, lineH, skewVal)
-    }
-              ` : `<div class="page-spacer"></div>`
-  }
-              <div class="page-body ink-${state.bodyInk} font-${state.font} ${slantClass}" style="font-size:${state.textSize}px; line-height:${lineH}px; font-weight:${state.fontWeight}; letter-spacing:${state.letterSpacing}px; --skew:${skewVal}; --word-spacing:${state.wordSpacing}px;">${renderHandwritingLines(pageLines, pageIndex)
-  }</div>
+                ${template.header(title, subject, date, metaSep, lineH, skewVal)}
+              ` : `<div class="page-spacer"></div>`}
+              <div class="page-body ink-${state.bodyInk} font-${state.font} ${slantClass}" style="font-size:${state.textSize}px; line-height:${lineH}px; font-weight:${state.fontWeight}; letter-spacing:${state.letterSpacing}px; --skew:${skewVal}; --word-spacing:${state.wordSpacing}px;">${renderHandwritingLines(pageLines, pageIndex)}</div>
             </div>
             <div class="corner-fold"></div>
-            <div class="page-number">${pageIndex + 1
-  }</div>
+            <div class="page-number">${pageIndex + 1}</div>
           </div>
         </div>
       </div>`).join('');
-}
+    }
 
     function escHtml(value) {
       return String(value)
@@ -1069,69 +993,55 @@ La teoría celular establece que todos los seres vivos están formados por célu
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-}
+    }
 
     function escAttr(value) {
       return escHtml(value).replace(/'/g, '&#39;');
-}
+    }
 
     function getTemplateConfig(templateId) {
       const baseHeader = (title, subject, date, metaSep, lineH, skewVal) => `
-        <div class="page-title ink-${state.titleInk} font-${state.font}" style="font-size:${state.textSize + 6}px; line-height:${lineH}px; font-weight:${state.fontWeight}; letter-spacing:${state.letterSpacing}px; --skew:${skewVal}; transform: skewX(${skewVal});">${escHtml(title)
-  }</div>
-        <div class="page-meta ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 4}px; line-height:${lineH}px;">${escHtml(subject)
-  }${metaSep
-  }${escHtml(date)
-  }</div>
+        <div class="page-title ink-${state.titleInk} font-${state.font}" style="font-size:${state.textSize + 6}px; line-height:${lineH}px; font-weight:${state.fontWeight}; letter-spacing:${state.letterSpacing}px; --skew:${skewVal}; transform: skewX(${skewVal});">${escHtml(title)}</div>
+        <div class="page-meta ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 4}px; line-height:${lineH}px;">${escHtml(subject)}${metaSep}${escHtml(date)}</div>
       `;
 
       const templates = {
         report: {
           header: baseHeader,
           decor: () => '',
-    },
+        },
         minimal: {
           header: (title, subject, date, metaSep, lineH, skewVal) => `
-            <div class="page-title page-title-minimal ink-${state.titleInk} font-${state.font}" style="font-size:${state.textSize + 4}px; line-height:${lineH}px; font-weight:${state.fontWeight}; letter-spacing:${state.letterSpacing}px; --skew:${skewVal}; transform: skewX(${skewVal});">${escHtml(title)
-      }</div>
-            <div class="page-meta ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 5}px; line-height:${lineH}px;">${escHtml(subject)
-      }${metaSep
-      }${escHtml(date)
-      }</div>
+            <div class="page-title page-title-minimal ink-${state.titleInk} font-${state.font}" style="font-size:${state.textSize + 4}px; line-height:${lineH}px; font-weight:${state.fontWeight}; letter-spacing:${state.letterSpacing}px; --skew:${skewVal}; transform: skewX(${skewVal});">${escHtml(title)}</div>
+            <div class="page-meta ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 5}px; line-height:${lineH}px;">${escHtml(subject)}${metaSep}${escHtml(date)}</div>
           `,
           decor: () => '',
-    },
+        },
         cover: {
           header: (title, subject, date, metaSep, lineH, skewVal) => `
             <div class="cover-block">
-              <div class="cover-kicker ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 3}px;">${escHtml(subject || 'Trabajo escolar')
-      }</div>
-              <div class="cover-title ink-${state.titleInk} font-${state.font}" style="font-size:${state.textSize + 18}px; line-height:${lineH + 16}px; font-weight:${state.fontWeight}; --skew:${skewVal}; transform: skewX(${skewVal});">${escHtml(title)
-      }</div>
-              <div class="cover-date ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 2}px;">${escHtml(date)
-      }</div>
+              <div class="cover-kicker ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 3}px;">${escHtml(subject || 'Trabajo escolar')}</div>
+              <div class="cover-title ink-${state.titleInk} font-${state.font}" style="font-size:${state.textSize + 18}px; line-height:${lineH + 16}px; font-weight:${state.fontWeight}; --skew:${skewVal}; transform: skewX(${skewVal});">${escHtml(title)}</div>
+              <div class="cover-date ink-${state.metaInk} font-${state.font}" style="font-size:${state.textSize - 2}px;">${escHtml(date)}</div>
             </div>
           `,
           decor: pageIndex => pageIndex === 0 ? '<div class="template-band"></div><div class="template-stamp">Entrega</div>' : '',
-    },
+        },
         science: {
           header: baseHeader,
           decor: pageIndex => pageIndex === 0 ? '<div class="template-doodle template-doodle-science">H2O</div><div class="template-corner-note">Observaciones</div>' : '',
-    },
+        },
         math: {
           header: baseHeader,
           decor: pageIndex => pageIndex === 0 ? '<div class="template-doodle template-doodle-math">x+y</div><div class="template-grid-mark">123</div>' : '',
-    },
-  };
+        },
+      };
 
-      return templates[templateId
-  ] || templates.report;
-}
+      return templates[templateId] || templates.report;
+    }
 
     async function handlePhoto(event) {
-      const file = event.target.files[
-    0
-  ];
+      const file = event.target.files[0];
       if (!file) return;
 
       const prev = document.getElementById('photoPreview');
@@ -1139,7 +1049,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
       reader.onload = readerEvent => {
         prev.src = readerEvent.target.result;
         prev.style.display = 'block';
-  };
+      };
       reader.readAsDataURL(file);
 
       const msg = document.getElementById('analyzingMsg');
@@ -1151,17 +1061,16 @@ La teoría celular establece que todos los seres vivos están formados por célu
         const formData = new FormData();
         formData.append('image', file);
 
-        const response = await fetch(API_URL,
-    {
+        const response = await fetch(API_URL, {
           method: 'POST',
           headers: await getPrivateHeaders(),
           body: formData
-    });
+        });
 
         const data = await readJsonResponse(response);
         if (!response.ok) {
           throw new Error(data.error || 'Error del servidor');
-    }
+        }
 
         state.font = data.font;
         state.slant = data.slant;
@@ -1180,21 +1089,19 @@ La teoría celular establece que todos los seres vivos están formados por célu
 
         syncUI(data);
         msg.style.display = 'none';
-        res.textContent = `Estilo detectado: ${data.description
-    } (confianza: ${Math.round((data.confidence || 0.8) * 100)
-    }%)`;
+        res.textContent = `Estilo detectado: ${data.description} (confianza: ${Math.round((data.confidence || 0.8) * 100)}%)`;
         res.style.display = 'block';
 
         render();
         showToast('Letra analizada y aplicada');
-  } catch (error) {
+      } catch (error) {
         msg.style.display = 'none';
         res.textContent = 'Error: ' + error.message;
         res.style.display = 'block';
         showToast('Error al analizar la imagen');
         console.error(error);
-  }
-}
+      }
+    }
 
     function syncUI(data) {
       document.getElementById('sizeSlider').value = data.textSize;
@@ -1208,42 +1115,34 @@ La teoría celular establece que todos los seres vivos están formados por célu
       document.getElementById('mistakeSlider').value = state.mistakeIntensity;
       document.getElementById('mistakeVal').textContent = state.mistakeIntensity.toFixed(2);
 
-      document.querySelectorAll('[data-font
-  ]').forEach(item => {
+      document.querySelectorAll('[data-font]').forEach(item => {
         item.classList.toggle('active', item.dataset.font === data.font);
-  });
-      document.querySelectorAll('[data-slant
-  ]').forEach(item => {
+      });
+      document.querySelectorAll('[data-slant]').forEach(item => {
         item.classList.toggle('active', item.dataset.slant === data.slant);
-  });
-      document.querySelectorAll('[data-ink
-  ]').forEach(item => {
+      });
+      document.querySelectorAll('[data-ink]').forEach(item => {
         item.classList.toggle('active', item.dataset.ink === data.ink);
-  });
+      });
       syncInkRows();
-}
+    }
 
     function syncAllControls() {
-      document.querySelectorAll('[data-font
-  ]').forEach(item => {
+      document.querySelectorAll('[data-font]').forEach(item => {
         item.classList.toggle('active', item.dataset.font === state.font);
-  });
-      document.querySelectorAll('[data-slant
-  ]').forEach(item => {
+      });
+      document.querySelectorAll('[data-slant]').forEach(item => {
         item.classList.toggle('active', item.dataset.slant === state.slant);
-  });
-      document.querySelectorAll('[data-lines
-  ]').forEach(item => {
+      });
+      document.querySelectorAll('[data-lines]').forEach(item => {
         item.classList.toggle('active', item.dataset.lines === state.lines);
-  });
-      document.querySelectorAll('[data-size
-  ]').forEach(item => {
+      });
+      document.querySelectorAll('[data-size]').forEach(item => {
         item.classList.toggle('active', item.dataset.size === state.size);
-  });
-      document.querySelectorAll('[data-template
-  ]').forEach(item => {
+      });
+      document.querySelectorAll('[data-template]').forEach(item => {
         item.classList.toggle('active', item.dataset.template === state.template);
-  });
+      });
 
       document.getElementById('sizeSlider').value = state.textSize;
       document.getElementById('sizeVal').textContent = state.textSize + 'px';
@@ -1266,7 +1165,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
       document.getElementById('tiltSlider').value = state.photoTilt;
       document.getElementById('tiltVal').textContent = state.photoTilt.toFixed(2);
       syncInkRows();
-}
+    }
 
     function buildPaperLines(type, width, height, gap) {
       if (type === 'blank') return '';
@@ -1274,28 +1173,26 @@ La teoría celular establece que todos los seres vivos están formados por célu
       const lines = [];
       for (let y = 8 + gap; y < height; y += gap) {
         lines.push(`<span class="paper-line paper-line-h" style="top:${y}px;"></span>`);
-  }
+      }
 
       if (type === 'grid') {
         for (let x = gap; x < width; x += gap) {
           lines.push(`<span class="paper-line paper-line-v" style="left:${x}px;"></span>`);
-    }
-  }
+        }
+      }
 
       return lines.join('');
-}
+    }
 
     function syncInkRows() {
       document.querySelectorAll('.ink-row').forEach(row => {
         const target = row.dataset.inkTarget;
-        const ink = target === 'all' ? state.ink : state[target
-    ];
-        row.querySelectorAll('[data-ink
-    ]').forEach(item => {
+        const ink = target === 'all' ? state.ink : state[target];
+        row.querySelectorAll('[data-ink]').forEach(item => {
           item.classList.toggle('active', item.dataset.ink === ink);
-    });
-  });
-}
+        });
+      });
+    }
 
     function wrapBodyLines(text, pageW, margin) {
       const contentW = pageW - margin - 44;
@@ -1307,7 +1204,7 @@ La teoría celular establece que todos los seres vivos están formados por célu
         if (!rawLine.trim()) {
           lines.push('');
           return;
-    }
+        }
 
         let line = '';
         rawLine.split(/\s+/).forEach(word => {
@@ -1315,21 +1212,19 @@ La teoría celular establece que todos los seres vivos están formados por célu
           if (stripColorTags(test).length > maxChars && line) {
             lines.push(line);
             line = word;
-      } else {
+          } else {
             line = test;
-      }
-    });
+          }
+        });
         lines.push(line);
-  });
+      });
 
-      return lines.length ? lines : [''
-  ];
-}
+      return lines.length ? lines : [''];
+    }
 
     function stripColorTags(text) {
-      return String(text).replace(/\[(\/)?(blue|black|red|green|azul|negro|rojo|verde)\
-  ]/gi, '');
-}
+      return String(text).replace(/\[(\/)?(blue|black|red|green|azul|negro|rojo|verde)\]/gi, '');
+    }
 
     function paginateBodyLines(lines, pageMinH) {
       const totalRows = Math.max(4, Math.floor((pageMinH - 28) / state.lineH));
@@ -1342,20 +1237,17 @@ La teoría celular establece que todos los seres vivos están formados por célu
         const take = pages.length === 0 ? firstPageRows : nextPageRows;
         pages.push(lines.slice(index, index + take));
         index += take;
-  }
+      }
 
-      return pages.length ? pages : [
-    [''
-    ]
-  ];
-}
+      return pages.length ? pages : [['']];
+    }
 
     function renderHandwritingLines(lines, pageIndex) {
       return lines.map((line, lineIndex) => {
         const absoluteLine = pageIndex * 100 + lineIndex;
         if (!line) {
           return '<div class="hand-line">&nbsp;</div>';
-    }
+        }
 
         const wave = Math.sin(absoluteLine * 1.45) * state.baselineWave;
         const lineRotate = seededRange(line + absoluteLine, -state.lineRotation, state.lineRotation);
@@ -1367,53 +1259,29 @@ La teoría celular establece que todos los seres vivos están formados por célu
           const rot = seededRange(seed + 'r', -state.jitter * 1.4, state.jitter * 1.4);
           const y = seededRange(seed + 'y', -state.baselineWave * 1.15, state.baselineWave * 1.15);
           const scale = 1 + seededRange(seed + 's', -state.jitter / 35, state.jitter / 32);
-          const pressure = seededRange(seed + 'p',
-      -0.08,
-      0.08);
-          const spacing = state.wordSpacing + seededRange(seed + 'w',
-      -0.8,
-      1.4);
-          const opacity = 0.9 + seededRange(seed + 'o',
-      0,
-      0.1);
-          const weight = Number(state.fontWeight) + Math.round(seededRange(seed + 'fw',
-      -80,
-      90));
+          const pressure = seededRange(seed + 'p', -0.08, 0.08);
+          const spacing = state.wordSpacing + seededRange(seed + 'w', -0.8, 1.4);
+          const opacity = 0.9 + seededRange(seed + 'o', 0, 0.1);
+          const weight = Number(state.fontWeight) + Math.round(seededRange(seed + 'fw', -80, 90));
 
-          const inkClass = part.ink ? ` ink-${part.ink
-      }` : '';
+          const inkClass = part.ink ? ` ink-${part.ink}` : '';
           const mistake = getWordMistake(seed, token);
-          const mistakeClass = mistake.classes ? ` ${mistake.classes
-      }` : '';
-          const wordStyle = `transform:translateY(${y.toFixed(2)
-      }px) rotate(${rot.toFixed(2)
-      }deg) scale(${scale.toFixed(3)
-      }); margin-right:${spacing.toFixed(2)
-      }px; opacity:${opacity.toFixed(2)
-      }; font-weight:${Math.max(300, Math.min(700, weight))
-      }; text-shadow:${pressure.toFixed(2)
-      }px 0 currentColor; ${mistake.style
-      }`;
-          return `<span class="hand-word${inkClass}${mistakeClass}" style="${wordStyle}" data-correction="${escHtml(mistake.correction)}">${renderOrganicLetters(mistake.text, seed, mistake.html)
-      }</span>`;
-    }).join('');
+          const mistakeClass = mistake.classes ? ` ${mistake.classes}` : '';
+          const wordStyle = `transform:translateY(${y.toFixed(2)}px) rotate(${rot.toFixed(2)}deg) scale(${scale.toFixed(3)}); margin-right:${spacing.toFixed(2)}px; opacity:${opacity.toFixed(2)}; font-weight:${Math.max(300, Math.min(700, weight))}; text-shadow:${pressure.toFixed(2)}px 0 currentColor; ${mistake.style}`;
+          return `<span class="hand-word${inkClass}${mistakeClass}" style="${wordStyle}" data-correction="${escHtml(mistake.correction)}">${renderOrganicLetters(mistake.text, seed, mistake.html)}</span>`;
+        }).join('');
 
-        return `<div class="hand-line" style="transform:translateY(${wave.toFixed(2)}px) rotate(${lineRotate.toFixed(2)}deg);">${words
-    }</div>`;
-  }).join('');
-}
+        return `<div class="hand-line" style="transform:translateY(${wave.toFixed(2)}px) rotate(${lineRotate.toFixed(2)}deg);">${words}</div>`;
+      }).join('');
+    }
 
     function getWordMistake(seed, token) {
       const intensity = state.mistakeIntensity || 0;
-      if (intensity <= 0 || token.length < 3 || /^[-*•
-  ]+$/.test(token)) {
-        return { classes: '', style: '', correction: '', text: token, html: escHtml(token)
-    };
-  }
+      if (intensity <= 0 || token.length < 3 || /^[-*•]+$/.test(token)) {
+        return { classes: '', style: '', correction: '', text: token, html: escHtml(token) };
+      }
 
-      const roll = seededRange(seed + 'mistake',
-  0,
-  1);
+      const roll = seededRange(seed + 'mistake', 0, 1);
       const strikeLimit = 0.045 * intensity;
       const correctionLimit = strikeLimit + 0.055 * intensity;
       const malformedLimit = correctionLimit + 0.18 * intensity;
@@ -1422,35 +1290,23 @@ La teoría celular establece que todos los seres vivos están formados por célu
         const wrongWord = makeMistypedWord(token, seed);
         return {
           classes: 'human-corrected',
-          style: `--correction-x:${seededRange(seed + 'cx',
-        -2,
-        8).toFixed(1)
-      }px; --correction-rot:${seededRange(seed + 'cr',
-        -8,
-        8).toFixed(2)
-      }deg;`,
+          style: `--correction-x:${seededRange(seed + 'cx', -2, 8).toFixed(1)}px; --correction-rot:${seededRange(seed + 'cr', -8, 8).toFixed(2)}deg;`,
           correction: token,
           text: wrongWord,
           html: escHtml(wrongWord),
-    };
-  }
+        };
+      }
 
       if (roll < correctionLimit) {
         const wrongWord = makeMistypedWord(token, seed);
         return {
           classes: 'human-corrected',
-          style: `--correction-x:${seededRange(seed + 'cx',
-        -2,
-        8).toFixed(1)
-      }px; --correction-rot:${seededRange(seed + 'cr',
-        -8,
-        8).toFixed(2)
-      }deg;`,
+          style: `--correction-x:${seededRange(seed + 'cx', -2, 8).toFixed(1)}px; --correction-rot:${seededRange(seed + 'cr', -8, 8).toFixed(2)}deg;`,
           correction: token,
           text: wrongWord,
           html: escHtml(wrongWord),
-    };
-  }
+        };
+      }
 
       if (roll < malformedLimit) {
         return {
@@ -1459,165 +1315,90 @@ La teoría celular establece que todos los seres vivos están formados por célu
           correction: '',
           text: '',
           html: renderMalformedWord(token, seed, intensity),
-    };
-  }
+        };
+      }
 
-      return { classes: '', style: '', correction: '', text: token, html: escHtml(token)
-  };
-}
+      return { classes: '', style: '', correction: '', text: token, html: escHtml(token) };
+    }
 
     function renderOrganicLetters(text, seed, fallbackHtml = '') {
       if (!text && fallbackHtml) return fallbackHtml;
       const intensity = Math.max(0.08, state.jitter || 0.8);
-      const cacheKey = `${seed
-  }|${text
-  }|${intensity.toFixed(2)
-  }|${state.letterSpacing.toFixed(2)
-  }`;
+      const cacheKey = `${seed}|${text}|${intensity.toFixed(2)}|${state.letterSpacing.toFixed(2)}`;
       const cached = organicLetterCache.get(cacheKey);
       if (cached) return cached;
 
       const html = Array.from(text).map((char, index) => {
         if (/\s/.test(char)) return escHtml(char);
-        if (!/[\p{L
-      }\p{N
-      }
-    ]/u.test(char)) return `<span class="organic-mark">${escHtml(char)
-    }</span>`;
-        const letterSeed = `${seed
-    }:organic:${index
-    }:${char
-    }`;
-        const rot = seededRange(letterSeed + 'rot',
-    -1.8 * intensity,
-    1.8 * intensity);
-        const y = seededRange(letterSeed + 'y',
-    -0.7 * intensity,
-    0.78 * intensity);
-        const x = seededRange(letterSeed + 'x',
-    -0.24 * intensity,
-    0.28 * intensity);
-        const sx = 1 + seededRange(letterSeed + 'sx',
-    -0.032 * intensity,
-    0.036 * intensity);
-        const sy = 1 + seededRange(letterSeed + 'sy',
-    -0.038 * intensity,
-    0.042 * intensity);
-        const weight = seededRange(letterSeed + 'w',
-    -0.022 * intensity,
-    0.026 * intensity);
-        const spacing = seededRange(letterSeed + 'ls',
-    -0.32 * intensity,
-    0.34 * intensity);
-        const style = `transform:translate(${x.toFixed(2)
-    }px, ${y.toFixed(2)
-    }px) rotate(${rot.toFixed(2)
-    }deg) scale(${sx.toFixed(3)
-    }, ${sy.toFixed(3)
-    }); margin-right:${spacing.toFixed(2)
-    }px; text-shadow:${weight.toFixed(3)
-    }em 0 currentColor;`;
-        return `<span class="organic-letter" style="${style}">${escHtml(char)
-    }</span>`;
-  }).join('');
+        if (!/[\p{L}\p{N}]/u.test(char)) return `<span class="organic-mark">${escHtml(char)}</span>`;
+        const letterSeed = `${seed}:organic:${index}:${char}`;
+        const rot = seededRange(letterSeed + 'rot', -1.8 * intensity, 1.8 * intensity);
+        const y = seededRange(letterSeed + 'y', -0.7 * intensity, 0.78 * intensity);
+        const x = seededRange(letterSeed + 'x', -0.24 * intensity, 0.28 * intensity);
+        const sx = 1 + seededRange(letterSeed + 'sx', -0.032 * intensity, 0.036 * intensity);
+        const sy = 1 + seededRange(letterSeed + 'sy', -0.038 * intensity, 0.042 * intensity);
+        const weight = seededRange(letterSeed + 'w', -0.022 * intensity, 0.026 * intensity);
+        const spacing = seededRange(letterSeed + 'ls', -0.32 * intensity, 0.34 * intensity);
+        const style = `transform:translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rot.toFixed(2)}deg) scale(${sx.toFixed(3)}, ${sy.toFixed(3)}); margin-right:${spacing.toFixed(2)}px; text-shadow:${weight.toFixed(3)}em 0 currentColor;`;
+        return `<span class="organic-letter" style="${style}">${escHtml(char)}</span>`;
+      }).join('');
 
       organicLetterCache.set(cacheKey, html);
       if (organicLetterCache.size > ORGANIC_CACHE_LIMIT) {
         organicLetterCache.delete(organicLetterCache.keys().next().value);
-  }
+      }
       return html;
-}
+    }
 
     function makeMistypedWord(token, seed) {
       const letters = token.split('');
       const editableIndexes = letters
-        .map((char, index) => (/[\p{L
-    }\p{N
-    }
-  ]/u.test(char) ? index : -1))
+        .map((char, index) => (/[\p{L}\p{N}]/u.test(char) ? index : -1))
         .filter(index => index >= 0);
 
       if (!editableIndexes.length) return token;
 
-      const mode = Math.floor(seededRange(seed + 'mode',
-  0, editableIndexes.length > 1 ? 4 : 3));
-      const pickedIndex = editableIndexes[Math.floor(seededRange(seed + 'ci',
-    0, editableIndexes.length))
-  ] || editableIndexes[
-    0
-  ];
+      const mode = Math.floor(seededRange(seed + 'mode', 0, editableIndexes.length > 1 ? 4 : 3));
+      const pickedIndex = editableIndexes[Math.floor(seededRange(seed + 'ci', 0, editableIndexes.length))] || editableIndexes[0];
 
       if (mode === 0 && editableIndexes.length > 1) {
         const nextEditablePosition = Math.min(editableIndexes.indexOf(pickedIndex) + 1, editableIndexes.length - 1);
-        const swapIndex = editableIndexes[nextEditablePosition
-    ] === pickedIndex ? editableIndexes[nextEditablePosition - 1
-    ] : editableIndexes[nextEditablePosition
-    ];
-        [letters[pickedIndex
-      ], letters[swapIndex
-      ]
-    ] = [letters[swapIndex
-      ], letters[pickedIndex
-      ]
-    ];
-  } else if (mode === 1 && editableIndexes.length > 3) {
-        letters.splice(pickedIndex,
-    1);
-  } else if (mode === 2) {
-        letters.splice(pickedIndex,
-    0, letters[pickedIndex
-    ]);
-  } else {
+        const swapIndex = editableIndexes[nextEditablePosition] === pickedIndex ? editableIndexes[nextEditablePosition - 1] : editableIndexes[nextEditablePosition];
+        [letters[pickedIndex], letters[swapIndex]] = [letters[swapIndex], letters[pickedIndex]];
+      } else if (mode === 1 && editableIndexes.length > 3) {
+        letters.splice(pickedIndex, 1);
+      } else if (mode === 2) {
+        letters.splice(pickedIndex, 0, letters[pickedIndex]);
+      } else {
         const replacements = 'aeiourstlnmcpbd';
-        const replacement = replacements[Math.floor(seededRange(seed + 'rep',
-      0, replacements.length))
-    ] || 'e';
-        const original = letters[pickedIndex
-    ];
-        letters[pickedIndex
-    ] = original === original.toUpperCase() ? replacement.toUpperCase() : replacement;
-  }
+        const replacement = replacements[Math.floor(seededRange(seed + 'rep', 0, replacements.length))] || 'e';
+        const original = letters[pickedIndex];
+        letters[pickedIndex] = original === original.toUpperCase() ? replacement.toUpperCase() : replacement;
+      }
 
       const result = letters.join('');
-      return result === token ? `${token.slice(0,
-    -1)
-  }${token.slice(-1)
-  }${token.slice(-1)
-  }` : result;
-}
+      return result === token ? `${token.slice(0, -1)}${token.slice(-1)}${token.slice(-1)}` : result;
+    }
 
     function renderMalformedWord(token, seed, intensity) {
       return token.split('').map((char, index) => {
         if (/\s/.test(char)) return char;
         const letterSeed = seed + ':letter:' + index;
-        const roll = seededRange(letterSeed + 'roll',
-    0,
-    1);
+        const roll = seededRange(letterSeed + 'roll', 0, 1);
         if (roll > 0.45 * intensity) return escHtml(char);
 
-        const rot = seededRange(letterSeed + 'rot',
-    -8,
-    8);
-        const y = seededRange(letterSeed + 'y',
-    -1.8,
-    1.8);
-        const sx = 1 + seededRange(letterSeed + 'sx',
-    -0.16,
-    0.14);
-        const sy = 1 + seededRange(letterSeed + 'sy',
-    -0.12,
-    0.18);
-        return `<span class="bad-letter" style="transform:translateY(${y.toFixed(2)}px) rotate(${rot.toFixed(2)}deg) scale(${sx.toFixed(2)}, ${sy.toFixed(2)});">${escHtml(char)
-    }</span>`;
-  }).join('');
-}
+        const rot = seededRange(letterSeed + 'rot', -8, 8);
+        const y = seededRange(letterSeed + 'y', -1.8, 1.8);
+        const sx = 1 + seededRange(letterSeed + 'sx', -0.16, 0.14);
+        const sy = 1 + seededRange(letterSeed + 'sy', -0.12, 0.18);
+        return `<span class="bad-letter" style="transform:translateY(${y.toFixed(2)}px) rotate(${rot.toFixed(2)}deg) scale(${sx.toFixed(2)}, ${sy.toFixed(2)});">${escHtml(char)}</span>`;
+      }).join('');
+    }
 
     function tokenizeColoredLine(line) {
       const parts = [];
-      const tagRegex = /\[(\/)?(blue|black|red|green|azul|negro|rojo|verde)\
-  ]/gi;
-      const colorMap = { azul: 'blue', negro: 'black', rojo: 'red', verde: 'green'
-  };
+      const tagRegex = /\[(\/)?(blue|black|red|green|azul|negro|rojo|verde)\]/gi;
+      const colorMap = { azul: 'blue', negro: 'black', rojo: 'red', verde: 'green' };
       let currentInk = null;
       let lastIndex = 0;
       let match;
@@ -1625,45 +1406,33 @@ La teoría celular establece que todos los seres vivos están formados por célu
       while ((match = tagRegex.exec(line)) !== null) {
         if (match.index > lastIndex) {
           pushTextParts(parts, line.slice(lastIndex, match.index), currentInk);
-    }
-        currentInk = match[
-      1
-    ] ? null : (colorMap[match[
-        2
-      ].toLowerCase()
-    ] || match[
-      2
-    ].toLowerCase());
+        }
+        currentInk = match[1] ? null : (colorMap[match[2].toLowerCase()] || match[2].toLowerCase());
         lastIndex = tagRegex.lastIndex;
-  }
+      }
 
       if (lastIndex < line.length) {
         pushTextParts(parts, line.slice(lastIndex), currentInk);
-  }
+      }
 
-      return parts.length ? parts : [
-    { text: line, ink: null
+      return parts.length ? parts : [{ text: line, ink: null }];
     }
-  ];
-}
 
     function pushTextParts(parts, text, ink) {
       text.split(/(\s+)/).forEach(part => {
-        if (part) parts.push({ text: part, ink
-    });
-  });
-}
+        if (part) parts.push({ text: part, ink });
+      });
+    }
 
     function seededRange(seed, min, max) {
       let hash = 2166136261;
       for (let i = 0; i < seed.length; i++) {
         hash ^= seed.charCodeAt(i);
-        hash = Math.imul(hash,
-    16777619);
-  }
+        hash = Math.imul(hash, 16777619);
+      }
       const normalized = (hash >>> 0) / 4294967295;
       return min + (max - min) * normalized;
-}
+    }
 
     async function exportPDF() {
       showToast('Generando PDF...');
@@ -1671,50 +1440,40 @@ La teoría celular establece que todos los seres vivos están formados por célu
       if (!scenes.length) return;
 
       await document.fonts.ready;
-      const { jsPDF
-  } = window.jspdf;
+      const { jsPDF } = window.jspdf;
       let pdf = null;
 
       for (let index = 0; index < scenes.length; index++) {
-        const scene = scenes[index
-    ];
+        const scene = scenes[index];
         scene.querySelectorAll('.export-page').forEach(page => page.classList.add('exporting-scan'));
-        const canvas = await html2canvas(scene,
-    {
+        const canvas = await html2canvas(scene, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#16162a',
           logging: false,
           onclone: doc => {
             doc.querySelectorAll('.export-page').forEach(item => item.classList.add('exporting-scan'));
-      }
-    });
+          }
+        });
         scene.querySelectorAll('.export-page').forEach(page => page.classList.remove('exporting-scan'));
 
-        const imgData = canvas.toDataURL('image/jpeg',
-    0.92);
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
         const ratio = canvas.height / canvas.width;
         const pdfW = 210;
         const pdfH = pdfW * ratio;
 
         if (!pdf) {
-          pdf = new jsPDF({ orientation: pdfH > pdfW ? 'p' : 'l', unit: 'mm', format: [pdfW, pdfH
-        ]
-      });
-    } else {
-          pdf.addPage([pdfW, pdfH
-      ], pdfH > pdfW ? 'p' : 'l');
-    }
+          pdf = new jsPDF({ orientation: pdfH > pdfW ? 'p' : 'l', unit: 'mm', format: [pdfW, pdfH] });
+        } else {
+          pdf.addPage([pdfW, pdfH], pdfH > pdfW ? 'p' : 'l');
+        }
 
-        pdf.addImage(imgData, 'JPEG',
-    0,
-    0, pdfW, pdfH);
-  }
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
+      }
 
       pdf.save('informe-cuaderno.pdf');
-      showToast(`PDF descargado (${scenes.length
-  } paginas)`);
-}
+      showToast(`PDF descargado (${scenes.length} paginas)`);
+    }
 
     async function exportIMG() {
       showToast('Generando imagen...');
@@ -1728,19 +1487,18 @@ La teoría celular establece que todos los seres vivos están formados por célu
         const clone = scene.cloneNode(true);
         clone.querySelectorAll('.export-page').forEach(page => page.classList.add('exporting-scan'));
         exportStack.appendChild(clone);
-  });
+      });
       document.body.appendChild(exportStack);
 
-      const canvas = await html2canvas(exportStack,
-  {
+      const canvas = await html2canvas(exportStack, {
         scale: 3,
         useCORS: true,
         backgroundColor: '#16162a',
         logging: false,
         onclone: doc => {
           doc.querySelectorAll('.export-page').forEach(item => item.classList.add('exporting-scan'));
-    }
-  });
+        }
+      });
       exportStack.remove();
 
       const link = document.createElement('a');
@@ -1748,14 +1506,14 @@ La teoría celular establece que todos los seres vivos están formados por célu
       link.href = canvas.toDataURL('image/png');
       link.click();
       showToast('Imagen descargada');
-}
+    }
 
     function showToast(message, duration = 2600) {
       const toast = document.getElementById('toast');
       toast.textContent = message;
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), duration);
-}
+    }
 
     refreshPresetSelect();
     syncAllControls();
@@ -1763,6 +1521,8 @@ La teoría celular establece que todos los seres vivos están formados por célu
   </script>
 </body>
 </html>
+
+
 
 
 
